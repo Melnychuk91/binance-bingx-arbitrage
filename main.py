@@ -141,7 +141,51 @@ def check_arbitrage():
         print(message)
         send_telegram(message)
 
+# =========================
+# TELEGRAM COMMAND LISTENER
+# =========================
 
+def telegram_listener():
+    offset = None
+
+    while True:
+        try:
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
+
+            params = {
+                "timeout": 30,
+                "offset": offset
+            }
+
+            response = requests.get(url, params=params, timeout=40)
+            data = response.json()
+
+            for update in data.get("result", []):
+                offset = update["update_id"] + 1
+
+                message = update.get("message")
+
+                if not message:
+                    continue
+
+                chat_id = str(message["chat"]["id"])
+                text = message.get("text", "").strip().lower()
+
+                # Принимаем команды только от твоего Telegram ID
+                if str(TELEGRAM_CHAT_ID) != chat_id:
+                    continue
+
+                if text in ["/start", "start", "/test", "test"]:
+                    send_telegram(
+                        "🤖 Binance ↔ BingX Arbitrage Bot работает!\n\n"
+                        f"Пара: {SYMBOL}\n"
+                        f"Минимальный спред: {MIN_SPREAD}%\n"
+                        f"Проверка каждые: {CHECK_INTERVAL} сек."
+                    )
+
+        except Exception as e:
+            print("Telegram listener error:", e)
+            time.sleep(5)
 # =========================
 # ЗАПУСК
 # =========================
@@ -149,7 +193,7 @@ def check_arbitrage():
 print("🚀 Binance ↔ BingX Arbitrage Scanner запущен")
 print(f"Пара: {SYMBOL}")
 print(f"Минимальный спред: {MIN_SPREAD}%")
-
+threading.Thread(target=telegram_listener, daemon=True).start()
 while True:
 
     try:
