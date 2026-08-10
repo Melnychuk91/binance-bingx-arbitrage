@@ -191,7 +191,26 @@ def telegram_listener():
 # =========================
 # ЗАПУСК
 # =========================
+def run_health_server():
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import os
 
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"Bot is running")
+
+        def log_message(self, format, *args):
+            pass
+
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    server.serve_forever()
+
+
+threading.Thread(target=run_health_server, daemon=True).start()
 print("🚀 Binance ↔ BingX Arbitrage Scanner запущен")
 print(f"Пара: {SYMBOL}")
 print(f"Минимальный спред: {MIN_SPREAD}%")
