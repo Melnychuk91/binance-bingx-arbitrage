@@ -72,11 +72,13 @@ def send_telegram(message):
 # =========================
 
 def get_price(exchange, symbol):
+    print(f"Получаю цену {symbol}...")
     ticker = exchange.fetch_ticker(symbol)
 
     bid = ticker.get("bid")
     ask = ticker.get("ask")
 
+    print(f"Цена получена: bid={bid}, ask={ask}")
     return bid, ask
 
 
