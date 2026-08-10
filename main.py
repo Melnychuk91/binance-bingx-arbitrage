@@ -213,11 +213,10 @@ elif text in ["/test", "test"]:
 
     except Exception as e:
         send_telegram(f"❌ Ошибка теста: {e}")
-
-
-    except Exception as e:
-        print("Telegram listener error:", e)
-        time.sleep(5)
+    
+except Exception as e:
+    print("Telegram listener error:", e)
+    time.sleep(5)
             
             
 # =========================
