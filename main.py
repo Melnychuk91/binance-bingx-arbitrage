@@ -2,7 +2,8 @@ import os
 import time
 import requests
 import ccxt
-
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 # =========================
 # НАСТРОЙКИ
 # =========================
@@ -13,7 +14,22 @@ CHECK_INTERVAL = 10        # проверка каждые 10 секунд
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+PORT = int(os.getenv("PORT", 10000))
 
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running")
+
+    def log_message(self, format, *args):
+        return
+
+def run_server():
+    server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_server, daemon=True).start()
 
 # =========================
 # БИРЖИ
