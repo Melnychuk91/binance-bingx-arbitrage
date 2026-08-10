@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 # =========================
 
 SYMBOL = "BTC/USDT"
-MIN_SPREAD = 0.30          # минимальная разница в %
+MIN_SPREAD = 0.05 # минимальная разница в %
 CHECK_INTERVAL = 10        # проверка каждые 10 секунд
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
