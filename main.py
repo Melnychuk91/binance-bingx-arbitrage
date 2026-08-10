@@ -177,17 +177,49 @@ def telegram_listener():
                 if str(TELEGRAM_CHAT_ID) != chat_id:
                     continue
 
-                if text in ["/start", "start", "/test", "test"]:
+                if text in ["/start", "start"]:
                     send_telegram(
                         "🤖 Binance ↔ BingX Arbitrage Bot работает!\n\n"
                         f"Пара: {SYMBOL}\n"
                         f"Минимальный спред: {MIN_SPREAD}%\n"
                         f"Проверка каждые: {CHECK_INTERVAL} сек."
                     )
+elif text in ["/test", "test"]:
+    try:
+        binance_bid, binance_ask = get_price(binance, SYMBOL)
+        bingx_bid, bingx_ask = get_price(bingx, SYMBOL)
 
-        except Exception as e:
-            print("Telegram listener error:", e)
-            time.sleep(5)
+        spread_1 = (bingx_bid - binance_ask) / binance_ask * 100
+        spread_2 = (binance_bid - bingx_ask) / bingx_ask * 100
+
+        if spread_1 >= spread_2:
+            send_telegram(
+                f"🧪 ТЕСТ АРБИТРАЖА\n\n"
+                f"Пара: {SYMBOL}\n"
+                f"Binance ASK: {binance_ask}\n"
+                f"BingX BID: {bingx_bid}\n"
+                f"Спред: {spread_1:.4f}%\n\n"
+                f"➡️ Купить Binance → продать BingX"
+            )
+        else:
+            send_telegram(
+                f"🧪 ТЕСТ АРБИТРАЖА\n\n"
+                f"Пара: {SYMBOL}\n"
+                f"BingX ASK: {bingx_ask}\n"
+                f"Binance BID: {binance_bid}\n"
+                f"Спред: {spread_2:.4f}%\n\n"
+                f"➡️ Купить BingX → продать Binance"
+            )
+
+    except Exception as e:
+        send_telegram(f"❌ Ошибка теста: {e}")
+
+
+    except Exception as e:
+        print("Telegram listener error:", e)
+        time.sleep(5)
+            
+            
 # =========================
 # ЗАПУСК
 # =========================
