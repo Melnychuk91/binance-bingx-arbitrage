@@ -151,7 +151,7 @@ def telegram_listener():
     offset = None
 
     while True:
-        try:
+      try:
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
 
             params = {
@@ -184,16 +184,16 @@ def telegram_listener():
                         f"Минимальный спред: {MIN_SPREAD}%\n"
                         f"Проверка каждые: {CHECK_INTERVAL} сек."
                     )
-elif text in ["/test", "test"]:
-    try:
-        binance_bid, binance_ask = get_price(binance, SYMBOL)
-        bingx_bid, bingx_ask = get_price(bingx, SYMBOL)
+                elif text in ["/test", "test"]:
+            try:
+                   binance_bid, binance_ask = get_price(binance, SYMBOL)
+                   bingx_bid, bingx_ask = get_price(bingx, SYMBOL)
 
-        spread_1 = (bingx_bid - binance_ask) / binance_ask * 100
-        spread_2 = (binance_bid - bingx_ask) / bingx_ask * 100
+                   spread_1 = (bingx_bid - binance_ask) / binance_ask * 100
+                   spread_2 = (binance_bid - bingx_ask) / bingx_ask * 100
 
-        if spread_1 >= spread_2:
-            send_telegram(
+                   if spread_1 >= spread_2:
+                       send_telegram(
                 f"🧪 ТЕСТ АРБИТРАЖА\n\n"
                 f"Пара: {SYMBOL}\n"
                 f"Binance ASK: {binance_ask}\n"
@@ -210,13 +210,12 @@ elif text in ["/test", "test"]:
                 f"Спред: {spread_2:.4f}%\n\n"
                 f"➡️ Купить BingX → продать Binance"
             )
-
-    except Exception as e:
-        send_telegram(f"❌ Ошибка теста: {e}")
+            except Exception as e:
+               send_telegram(f"❌ Ошибка теста: {e}")
     
-except Exception as e:
-    print("Telegram listener error:", e)
-    time.sleep(5)
+      except Exception as e:
+          print("Telegram listener error:", e)
+          time.sleep(5)
             
             
 # =========================
