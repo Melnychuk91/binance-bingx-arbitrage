@@ -10,21 +10,10 @@ import requests
 # НАСТРОЙКИ
 # ============================================================
 
-TELEGRAM_BOT_TOKEN = os.getenv(
-    "TELEGRAM_BOT_TOKEN",
-    ""
-)
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-TELEGRAM_CHAT_ID = os.getenv(
-    "TELEGRAM_CHAT_ID",
-    ""
-)
-
-
-# ============================================================
-# ПАРЫ ДЛЯ МОНИТОРИНГА
-# ============================================================
-
+# Пары для мониторинга
 SYMBOLS = [
     "BTCUSDT",
     "ETHUSDT",
@@ -38,79 +27,32 @@ SYMBOLS = [
     "LTCUSDT",
 ]
 
+# Как часто проверять пары
+CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "5"))
 
-# ============================================================
-# ФИЛЬТР ВЫГОДНОГО АРБИТРАЖА
-# ============================================================
+# Комиссия Binance, %
+# При необходимости поменяем после проверки твоего аккаунта
+BINANCE_FEE = float(os.getenv("BINANCE_FEE", "0.10"))
 
-# Минимальный сырой спред
-MIN_SPREAD = float(
-    os.getenv(
-        "MIN_SPREAD",
-        "0.35"
-    )
-)
+# Комиссия BingX, %
+BINGX_FEE = float(os.getenv("BINGX_FEE", "0.10"))
 
-# Комиссия Binance
-BINANCE_FEE = float(
-    os.getenv(
-        "BINANCE_FEE",
-        "0.10"
-    )
-)
+# Запас на проскальзывание / задержку, %
+SAFETY_MARGIN = float(os.getenv("SAFETY_MARGIN", "0.05"))
 
-# Комиссия BingX
-BINGX_FEE = float(
-    os.getenv(
-        "BINGX_FEE",
-        "0.10"
-    )
-)
+# Минимальный ЧИСТЫЙ спред,
+# при котором отправляем автоматический сигнал
+MIN_NET_SPREAD = float(os.getenv("MIN_NET_SPREAD", "0.05"))
 
-# Запас на проскальзывание
-SLIPPAGE_BUFFER = float(
-    os.getenv(
-        "SLIPPAGE_BUFFER",
-        "0.05"
-    )
-)
-
-# Минимальный чистый спред
-MIN_NET_SPREAD = float(
-    os.getenv(
-        "MIN_NET_SPREAD",
-        "0.10"
-    )
-)
-
-
-# ============================================================
-# ЧАСТОТА ПРОВЕРКИ
-# ============================================================
-
-CHECK_INTERVAL = int(
-    os.getenv(
-        "CHECK_INTERVAL",
-        "5"
-    )
-)
-
-# Один и тот же сигнал не чаще этого времени
-ALERT_COOLDOWN = int(
-    os.getenv(
-        "ALERT_COOLDOWN",
-        "30"
-    )
-)
+# Не присылать один и тот же сигнал слишком часто
+ALERT_COOLDOWN = int(os.getenv("ALERT_COOLDOWN", "60"))
 
 
 # ============================================================
 # API
 # ============================================================
 
-BINANCE_URL = (
-    "https://api.binance.com/api/v3/ticker/bookTicker"
-)
+BINANCE_URL = "https://api.binance.com/api/v3/ticker/bookTicker"
 
 BINGX_URL = (
     "https://open-api.bingx.com/"
@@ -119,43 +61,40 @@ BINGX_URL = (
 
 
 # ============================================================
-# ПРЕОБРАЗОВАНИЕ СИМВОЛА
+# ПОЛУЧЕНИЕ СИМВОЛА BINGX
 # ============================================================
 
 def get_bingx_symbol(symbol):
+    """
+    BTCUSDT -> BTC-USDT
+    ETHUSDT -> ETH-USDT
+    SOLUSDT -> SOL-USDT
+    """
 
     if symbol.endswith("USDT"):
-        return (
-            symbol[:-4]
-            + "-USDT"
-        )
+        return symbol[:-4] + "-USDT"
 
     if symbol.endswith("USDC"):
-        return (
-            symbol[:-4]
-            + "-USDC"
-        )
+        return symbol[:-4] + "-USDC"
 
     if symbol.endswith("BTC"):
-        return (
-            symbol[:-3]
-            + "-BTC"
-        )
+        return symbol[:-3] + "-BTC"
 
     return symbol
 
 
 # ============================================================
-# BINANCE PRICE
+# BINANCE
 # ============================================================
 
 def get_binance_price(symbol):
+    """
+    Получает лучший BID и ASK Binance.
+    """
 
     response = requests.get(
         BINANCE_URL,
-        params={
-            "symbol": symbol
-        },
+        params={"symbol": symbol},
         timeout=10
     )
 
@@ -163,47 +102,31 @@ def get_binance_price(symbol):
 
     data = response.json()
 
-    if not isinstance(data, dict):
+    bid = float(data["bidPrice"])
+    ask = float(data["askPrice"])
+
+    if bid <= 0 or ask <= 0:
         raise RuntimeError(
-            f"Unexpected Binance response: {data}"
+            f"Binance returned invalid prices for {symbol}"
         )
-
-    if "bidPrice" not in data:
-        raise RuntimeError(
-            f"Binance response has no bidPrice: {data}"
-        )
-
-    if "askPrice" not in data:
-        raise RuntimeError(
-            f"Binance response has no askPrice: {data}"
-        )
-
-    bid = float(
-        data["bidPrice"]
-    )
-
-    ask = float(
-        data["askPrice"]
-    )
 
     return bid, ask
 
 
 # ============================================================
-# BINGX PRICE
+# BINGX
 # ============================================================
 
 def get_bingx_price(symbol):
+    """
+    Получает лучший BID и ASK BingX.
+    """
 
-    bingx_symbol = (
-        get_bingx_symbol(symbol)
-    )
+    bingx_symbol = get_bingx_symbol(symbol)
 
     response = requests.get(
         BINGX_URL,
-        params={
-            "symbol": bingx_symbol
-        },
+        params={"symbol": bingx_symbol},
         timeout=10
     )
 
@@ -211,199 +134,134 @@ def get_bingx_price(symbol):
 
     data = response.json()
 
-    print(
-        f"BingX raw response "
-        f"{symbol}: {data}"
-    )
-
-    # --------------------------------------------------------
-    # Проверяем API code
-    # --------------------------------------------------------
-
-    if str(
-        data.get(
-            "code",
-            "0"
-        )
-    ) != "0":
-
+    if str(data.get("code", "0")) != "0":
         raise RuntimeError(
-            f"BingX API error: {data}"
+            f"BingX API error for {symbol}: {data}"
         )
 
-    result = data.get(
-        "data"
-    )
+    result = data.get("data")
 
-    if result is None:
+    if not result:
         raise RuntimeError(
-            f"BingX returned no data: {data}"
+            f"BingX returned empty data for {symbol}: {data}"
         )
 
-    # --------------------------------------------------------
-    # ВАЖНО:
-    # BingX может вернуть LIST
-    # --------------------------------------------------------
-
-    if isinstance(
-        result,
-        list
-    ):
-
-        if len(result) == 0:
-            raise RuntimeError(
-                f"BingX returned empty list: {data}"
-            )
-
+    # BingX иногда возвращает список
+    if isinstance(result, list):
         result = result[0]
 
-    # --------------------------------------------------------
-    # Иногда API может вернуть словарь,
-    # внутри которого снова находится список
-    # --------------------------------------------------------
+    bid = float(result["bidPrice"])
+    ask = float(result["askPrice"])
 
-    if isinstance(
-        result,
-        dict
-    ):
-
-        if (
-            "bidPrice" not in result
-            or "askPrice" not in result
-        ):
-
-            possible_list = (
-                result.get("data")
-                or result.get("list")
-                or result.get("ticker")
-            )
-
-            if isinstance(
-                possible_list,
-                list
-            ):
-
-                if len(possible_list) == 0:
-                    raise RuntimeError(
-                        f"BingX empty nested list: {data}"
-                    )
-
-                result = possible_list[0]
-
-    # --------------------------------------------------------
-    # После всех преобразований должен быть словарь
-    # --------------------------------------------------------
-
-    if not isinstance(
-        result,
-        dict
-    ):
-
+    if bid <= 0 or ask <= 0:
         raise RuntimeError(
-            "Unexpected BingX data format: "
-            f"{type(result).__name__} | {result}"
+            f"BingX returned invalid prices for {symbol}"
         )
-
-    if "bidPrice" not in result:
-
-        raise RuntimeError(
-            f"BingX response has no bidPrice: "
-            f"{result}"
-        )
-
-    if "askPrice" not in result:
-
-        raise RuntimeError(
-            f"BingX response has no askPrice: "
-            f"{result}"
-        )
-
-    bid = float(
-        result["bidPrice"]
-    )
-
-    ask = float(
-        result["askPrice"]
-    )
 
     return bid, ask
 
 
 # ============================================================
-# SPREAD
+# ПОЛУЧЕНИЕ ВСЕХ ЦЕН
 # ============================================================
 
-def calculate_spreads(
+def get_prices(symbol):
+    """
+    Получает цены Binance и BingX.
+    """
+
+    binance_bid, binance_ask = get_binance_price(symbol)
+    bingx_bid, bingx_ask = get_bingx_price(symbol)
+
+    return (
+        binance_bid,
+        binance_ask,
+        bingx_bid,
+        bingx_ask
+    )
+
+
+# ============================================================
+# РАСЧЁТ АРБИТРАЖА
+# ============================================================
+
+def calculate_arbitrage(
     binance_bid,
     binance_ask,
     bingx_bid,
     bingx_ask
 ):
+    """
+    Направление 1:
 
+    Купить Binance ASK
+    Продать BingX BID
+
+    Направление 2:
+
+    Купить BingX ASK
+    Продать Binance BID
+    """
+
+    # --------------------------------------------------------
     # Binance -> BingX
-    spread_1 = (
-        (
-            bingx_bid
-            - binance_ask
-        )
+    # --------------------------------------------------------
+
+    gross_1 = (
+        (bingx_bid - binance_ask)
         / binance_ask
         * 100
     )
 
+    fees_1 = BINANCE_FEE + BINGX_FEE
+
+    net_1 = (
+        gross_1
+        - fees_1
+        - SAFETY_MARGIN
+    )
+
+    # --------------------------------------------------------
     # BingX -> Binance
-    spread_2 = (
-        (
-            binance_bid
-            - bingx_ask
-        )
+    # --------------------------------------------------------
+
+    gross_2 = (
+        (binance_bid - bingx_ask)
         / bingx_ask
         * 100
     )
 
-    return (
-        spread_1,
-        spread_2
+    fees_2 = BINANCE_FEE + BINGX_FEE
+
+    net_2 = (
+        gross_2
+        - fees_2
+        - SAFETY_MARGIN
     )
 
-
-# ============================================================
-# ЧИСТЫЙ СПРЕД
-# ============================================================
-
-def calculate_net_spread(
-    raw_spread
-):
-
-    total_cost = (
-        BINANCE_FEE
-        + BINGX_FEE
-        + SLIPPAGE_BUFFER
-    )
-
-    return (
-        raw_spread
-        - total_cost
-    )
+    return {
+        "gross_1": gross_1,
+        "net_1": net_1,
+        "gross_2": gross_2,
+        "net_2": net_2,
+    }
 
 
 # ============================================================
 # TELEGRAM
 # ============================================================
 
-def send_telegram(
-    message
-):
+def send_telegram(message):
+    """
+    Отправляет сообщение в Telegram.
+    """
 
     if not TELEGRAM_BOT_TOKEN:
-        print(
-            "TELEGRAM_BOT_TOKEN is not set"
-        )
+        print("TELEGRAM_BOT_TOKEN is not set")
         return
 
     if not TELEGRAM_CHAT_ID:
-        print(
-            "TELEGRAM_CHAT_ID is not set"
-        )
+        print("TELEGRAM_CHAT_ID is not set")
         return
 
     url = (
@@ -417,7 +275,6 @@ def send_telegram(
     }
 
     try:
-
         response = requests.post(
             url,
             json=payload,
@@ -427,7 +284,6 @@ def send_telegram(
         response.raise_for_status()
 
     except Exception as e:
-
         print(
             "Telegram send error:",
             repr(e)
@@ -435,131 +291,138 @@ def send_telegram(
 
 
 # ============================================================
-# ТЕСТ ОДНОЙ ПАРЫ
+# ФОРМАТ ТЕСТОВОГО СООБЩЕНИЯ
 # ============================================================
 
-def create_test_message(
-    symbol
+def format_test_message(
+    symbol,
+    binance_bid,
+    binance_ask,
+    bingx_bid,
+    bingx_ask,
+    result
 ):
+    """
+    Формирует подробное сообщение для /test.
+    """
 
-    (
-        binance_bid,
-        binance_ask
-    ) = get_binance_price(
-        symbol
-    )
+    gross_1 = result["gross_1"]
+    net_1 = result["net_1"]
 
-    (
-        bingx_bid,
-        bingx_ask
-    ) = get_bingx_price(
-        symbol
-    )
+    gross_2 = result["gross_2"]
+    net_2 = result["net_2"]
 
-    (
-        spread_1,
-        spread_2
-    ) = calculate_spreads(
-        binance_bid,
-        binance_ask,
-        bingx_bid,
-        bingx_ask
-    )
-
-    net_1 = calculate_net_spread(
-        spread_1
-    )
-
-    net_2 = calculate_net_spread(
-        spread_2
-    )
-
-    if spread_1 >= spread_2:
-
-        direction = (
-            "➡️ Купить Binance "
-            "→ продать BingX"
+    if net_1 >= net_2:
+        best_direction = (
+            "➡️ Купить Binance → продать BingX"
         )
-
-        best_spread = spread_1
+        best_gross = gross_1
         best_net = net_1
-
     else:
-
-        direction = (
-            "➡️ Купить BingX "
-            "→ продать Binance"
+        best_direction = (
+            "➡️ Купить BingX → продать Binance"
         )
-
-        best_spread = spread_2
+        best_gross = gross_2
         best_net = net_2
+
+    if best_net >= MIN_NET_SPREAD:
+        status = "🟢 ВЫГОДНЫЙ АРБИТРАЖ"
+    else:
+        status = "⚪ Возможности нет"
 
     message = (
         "🧪 ТЕСТ АРБИТРАЖА\n\n"
 
         f"Пара: {symbol}\n\n"
 
-        f"Binance BID: "
-        f"{binance_bid}\n"
+        f"Binance BID: {binance_bid}\n"
+        f"Binance ASK: {binance_ask}\n\n"
 
-        f"Binance ASK: "
-        f"{binance_ask}\n\n"
+        f"BingX BID: {bingx_bid}\n"
+        f"BingX ASK: {bingx_ask}\n\n"
 
-        f"BingX BID: "
-        f"{bingx_bid}\n"
+        f"Binance → BingX:\n"
+        f"Сырой спред: {gross_1:.4f}%\n"
+        f"Чистый спред: {net_1:.4f}%\n\n"
 
-        f"BingX ASK: "
-        f"{bingx_ask}\n\n"
+        f"BingX → Binance:\n"
+        f"Сырой спред: {gross_2:.4f}%\n"
+        f"Чистый спред: {net_2:.4f}%\n\n"
 
-        f"Binance → BingX: "
-        f"{spread_1:.4f}%\n"
+        f"Комиссии: {BINANCE_FEE + BINGX_FEE:.4f}%\n"
+        f"Запас: {SAFETY_MARGIN:.4f}%\n\n"
 
-        f"BingX → Binance: "
-        f"{spread_2:.4f}%\n\n"
-
+        f"{status}\n"
         f"Лучшее направление:\n"
-        f"{direction}\n\n"
-
-        f"Сырой спред: "
-        f"{best_spread:.4f}%\n"
-
-        f"Комиссии: "
-        f"{BINANCE_FEE + BINGX_FEE:.4f}%\n"
-
-        f"Запас: "
-        f"{SLIPPAGE_BUFFER:.4f}%\n"
-
-        f"Ориентировочно чистыми: "
-        f"{best_net:.4f}%"
+        f"{best_direction}\n"
+        f"Сырой спред: {best_gross:.4f}%\n"
+        f"Чистый спред: {best_net:.4f}%"
     )
 
     return message
 
 
 # ============================================================
-# TEST ВСЕХ ПАР
+# /TEST
 # ============================================================
 
 def test_all_pairs():
+    """
+    Проверяет все пары и отправляет результаты.
+    """
 
     send_telegram(
         "🔎 Проверяю все пары...\n"
         "Это может занять несколько секунд."
     )
 
+    best_opportunity = None
+
     for symbol in SYMBOLS:
 
         try:
 
-            message = (
-                create_test_message(
-                    symbol
-                )
+            (
+                binance_bid,
+                binance_ask,
+                bingx_bid,
+                bingx_ask
+            ) = get_prices(symbol)
+
+            result = calculate_arbitrage(
+                binance_bid,
+                binance_ask,
+                bingx_bid,
+                bingx_ask
             )
 
-            send_telegram(
-                message
+            net_1 = result["net_1"]
+            net_2 = result["net_2"]
+
+            best_net = max(
+                net_1,
+                net_2
             )
+
+            if (
+                best_opportunity is None
+                or best_net > best_opportunity["net"]
+            ):
+                best_opportunity = {
+                    "symbol": symbol,
+                    "net": best_net
+                }
+
+            message = format_test_message(
+                symbol,
+                binance_bid,
+                binance_ask,
+                bingx_bid,
+                bingx_ask,
+                result
+            )
+
+            send_telegram(message)
 
         except Exception as e:
 
@@ -568,28 +431,33 @@ def test_all_pairs():
                 f"Ошибка: {e}"
             )
 
-        time.sleep(0.3)
+    if best_opportunity:
+
+        send_telegram(
+            "📊 ИТОГ ПРОВЕРКИ\n\n"
+            f"Лучшая пара: "
+            f"{best_opportunity['symbol']}\n"
+            f"Лучший чистый спред: "
+            f"{best_opportunity['net']:.4f}%\n\n"
+            f"Минимальный для сигнала: "
+            f"{MIN_NET_SPREAD:.4f}%"
+        )
 
 
 # ============================================================
-# МОНИТОРИНГ
+# АВТОМАТИЧЕСКИЙ МОНИТОРИНГ
 # ============================================================
 
 def arbitrage_monitor():
+    """
+    Постоянно проверяет все пары.
+    """
 
     last_alerts = {}
 
-    print(
-        "=" * 60
-    )
-
-    print(
-        "ARBITRAGE MONITOR STARTED"
-    )
-
-    print(
-        "=" * 60
-    )
+    print("=" * 60)
+    print("ARBITRAGE MONITOR STARTED")
+    print("=" * 60)
 
     print(
         "Pairs:",
@@ -597,36 +465,33 @@ def arbitrage_monitor():
     )
 
     print(
-        f"Minimum raw spread: "
-        f"{MIN_SPREAD}%"
+        f"Binance fee: {BINANCE_FEE}%"
     )
 
     print(
-        f"Binance fee: "
-        f"{BINANCE_FEE}%"
+        f"BingX fee: {BINGX_FEE}%"
     )
 
     print(
-        f"BingX fee: "
-        f"{BINGX_FEE}%"
+        f"Safety margin: {SAFETY_MARGIN}%"
     )
 
     print(
-        f"Slippage buffer: "
-        f"{SLIPPAGE_BUFFER}%"
+        f"Minimum NET spread: {MIN_NET_SPREAD}%"
     )
 
     print(
-        f"Minimum net spread: "
-        f"{MIN_NET_SPREAD}%"
+        f"Check interval: {CHECK_INTERVAL} sec"
     )
 
-    print(
-        f"Check interval: "
-        f"{CHECK_INTERVAL} sec"
-    )
+    print("=" * 60)
 
     while True:
+
+        cycle_start = time.time()
+
+        best_symbol = None
+        best_net = -999
 
         for symbol in SYMBOLS:
 
@@ -634,68 +499,61 @@ def arbitrage_monitor():
 
                 (
                     binance_bid,
-                    binance_ask
-                ) = get_binance_price(
-                    symbol
-                )
-
-                (
+                    binance_ask,
                     bingx_bid,
                     bingx_ask
-                ) = get_bingx_price(
-                    symbol
-                )
+                ) = get_prices(symbol)
 
-                (
-                    spread_1,
-                    spread_2
-                ) = calculate_spreads(
+                result = calculate_arbitrage(
                     binance_bid,
                     binance_ask,
                     bingx_bid,
                     bingx_ask
                 )
 
-                net_1 = (
-                    calculate_net_spread(
-                        spread_1
-                    )
-                )
+                gross_1 = result["gross_1"]
+                net_1 = result["net_1"]
 
-                net_2 = (
-                    calculate_net_spread(
-                        spread_2
-                    )
-                )
+                gross_2 = result["gross_2"]
+                net_2 = result["net_2"]
+
+                # ------------------------------------------------
+                # Ищем лучшую возможность
+                # ------------------------------------------------
+
+                if net_1 > best_net:
+
+                    best_net = net_1
+                    best_symbol = symbol
+
+                if net_2 > best_net:
+
+                    best_net = net_2
+                    best_symbol = symbol
 
                 print(
                     f"{symbol} | "
-                    f"S1={spread_1:.4f}% "
+                    f"S1={gross_1:.4f}% "
                     f"NET1={net_1:.4f}% | "
-                    f"S2={spread_2:.4f}% "
+                    f"S2={gross_2:.4f}% "
                     f"NET2={net_2:.4f}%"
                 )
 
                 now = time.time()
 
-                # ==================================================
+                # ------------------------------------------------
                 # BINANCE -> BINGX
-                # ==================================================
+                # ------------------------------------------------
 
-                if (
-                    spread_1 >= MIN_SPREAD
-                    and net_1 >= MIN_NET_SPREAD
-                ):
+                if net_1 >= MIN_NET_SPREAD:
 
-                    key = (
+                    alert_key = (
                         f"{symbol}_BINANCE_BINGX"
                     )
 
-                    last_time = (
-                        last_alerts.get(
-                            key,
-                            0
-                        )
+                    last_time = last_alerts.get(
+                        alert_key,
+                        0
                     )
 
                     if (
@@ -708,7 +566,6 @@ def arbitrage_monitor():
 
                             f"Пара: {symbol}\n\n"
 
-                            "🟢 Направление:\n"
                             "➡️ Купить Binance "
                             "→ продать BingX\n\n"
 
@@ -719,48 +576,37 @@ def arbitrage_monitor():
                             f"{bingx_bid}\n\n"
 
                             f"Сырой спред: "
-                            f"{spread_1:.4f}%\n"
+                            f"{gross_1:.4f}%\n"
 
                             f"Комиссии: "
                             f"{BINANCE_FEE + BINGX_FEE:.4f}%\n"
 
                             f"Запас: "
-                            f"{SLIPPAGE_BUFFER:.4f}%\n"
+                            f"{SAFETY_MARGIN:.4f}%\n\n"
 
-                            f"Чистый спред: "
-                            f"{net_1:.4f}%\n\n"
-
-                            "⚠️ Только сигнал. "
-                            "Сделки автоматически "
-                            "не совершаются."
+                            f"💰 ЧИСТЫЙ СПРЕД: "
+                            f"{net_1:.4f}%"
                         )
 
-                        send_telegram(
-                            message
-                        )
+                        send_telegram(message)
 
                         last_alerts[
-                            key
+                            alert_key
                         ] = now
 
-                # ==================================================
+                # ------------------------------------------------
                 # BINGX -> BINANCE
-                # ==================================================
+                # ------------------------------------------------
 
-                if (
-                    spread_2 >= MIN_SPREAD
-                    and net_2 >= MIN_NET_SPREAD
-                ):
+                if net_2 >= MIN_NET_SPREAD:
 
-                    key = (
+                    alert_key = (
                         f"{symbol}_BINGX_BINANCE"
                     )
 
-                    last_time = (
-                        last_alerts.get(
-                            key,
-                            0
-                        )
+                    last_time = last_alerts.get(
+                        alert_key,
+                        0
                     )
 
                     if (
@@ -773,7 +619,6 @@ def arbitrage_monitor():
 
                             f"Пара: {symbol}\n\n"
 
-                            "🟢 Направление:\n"
                             "➡️ Купить BingX "
                             "→ продать Binance\n\n"
 
@@ -784,28 +629,22 @@ def arbitrage_monitor():
                             f"{binance_bid}\n\n"
 
                             f"Сырой спред: "
-                            f"{spread_2:.4f}%\n"
+                            f"{gross_2:.4f}%\n"
 
                             f"Комиссии: "
                             f"{BINANCE_FEE + BINGX_FEE:.4f}%\n"
 
                             f"Запас: "
-                            f"{SLIPPAGE_BUFFER:.4f}%\n"
+                            f"{SAFETY_MARGIN:.4f}%\n\n"
 
-                            f"Чистый спред: "
-                            f"{net_2:.4f}%\n\n"
-
-                            "⚠️ Только сигнал. "
-                            "Сделки автоматически "
-                            "не совершаются."
+                            f"💰 ЧИСТЫЙ СПРЕД: "
+                            f"{net_2:.4f}%"
                         )
 
-                        send_telegram(
-                            message
-                        )
+                        send_telegram(message)
 
                         last_alerts[
-                            key
+                            alert_key
                         ] = now
 
             except Exception as e:
@@ -815,9 +654,25 @@ def arbitrage_monitor():
                     repr(e)
                 )
 
-        time.sleep(
-            CHECK_INTERVAL
+        # --------------------------------------------------------
+        # Итог цикла
+        # --------------------------------------------------------
+
+        if best_symbol is not None:
+
+            print(
+                f"BEST: {best_symbol} "
+                f"NET={best_net:.4f}%"
+            )
+
+        elapsed = time.time() - cycle_start
+
+        sleep_time = max(
+            1,
+            CHECK_INTERVAL - elapsed
         )
+
+        time.sleep(sleep_time)
 
 
 # ============================================================
@@ -825,6 +680,20 @@ def arbitrage_monitor():
 # ============================================================
 
 def telegram_listener():
+    """
+    Слушает команды Telegram.
+
+    /start
+    /test
+    """
+
+    if not TELEGRAM_BOT_TOKEN:
+
+        print(
+            "TELEGRAM_BOT_TOKEN is not set"
+        )
+
+        return
 
     offset = None
 
@@ -859,8 +728,7 @@ def telegram_listener():
             if not data.get("ok"):
 
                 raise RuntimeError(
-                    f"Telegram API error: "
-                    f"{data}"
+                    f"Telegram API error: {data}"
                 )
 
             for update in data.get(
@@ -869,24 +737,19 @@ def telegram_listener():
             ):
 
                 offset = (
-                    update["update_id"]
-                    + 1
+                    update["update_id"] + 1
                 )
 
-                message = (
-                    update.get(
-                        "message"
-                    )
+                message = update.get(
+                    "message"
                 )
 
                 if not message:
                     continue
 
-                chat = (
-                    message.get(
-                        "chat",
-                        {}
-                    )
+                chat = message.get(
+                    "chat",
+                    {}
                 )
 
                 chat_id = str(
@@ -896,28 +759,26 @@ def telegram_listener():
                     )
                 )
 
-                text = (
-                    message.get(
-                        "text",
-                        ""
-                    )
-                    .strip()
-                    .lower()
-                )
+                text = message.get(
+                    "text",
+                    ""
+                ).strip().lower()
 
-                # Только наш Telegram
+                # ------------------------------------------------
+                # Разрешаем команды только своему Telegram
+                # ------------------------------------------------
+
                 if (
                     TELEGRAM_CHAT_ID
                     and chat_id
-                    != str(
-                        TELEGRAM_CHAT_ID
-                    )
+                    != str(TELEGRAM_CHAT_ID)
                 ):
+
                     continue
 
-                # ==================================================
-                # START
-                # ==================================================
+                # ------------------------------------------------
+                # /start
+                # ------------------------------------------------
 
                 if text in [
                     "/start",
@@ -929,37 +790,36 @@ def telegram_listener():
                         "Arbitrage Bot\n\n"
 
                         "Мониторинг пар:\n"
-
                         + "\n".join(
-                            [
-                                f"• {symbol}"
-                                for symbol
-                                in SYMBOLS
-                            ]
+                            f"• {symbol}"
+                            for symbol in SYMBOLS
                         )
-
                         + "\n\n"
 
-                        f"Минимальный сырой "
-                        f"спред: {MIN_SPREAD}%\n"
+                        f"Binance комиссия: "
+                        f"{BINANCE_FEE}%\n"
+
+                        f"BingX комиссия: "
+                        f"{BINGX_FEE}%\n"
+
+                        f"Запас: "
+                        f"{SAFETY_MARGIN}%\n"
 
                         f"Минимальный чистый "
-                        f"спред: {MIN_NET_SPREAD}%\n"
+                        f"спред: "
+                        f"{MIN_NET_SPREAD}%\n"
 
                         f"Проверка каждые: "
                         f"{CHECK_INTERVAL} сек.\n\n"
 
                         "Команды:\n"
-
                         "/start — информация\n"
-
-                        "/test — "
-                        "проверить все пары"
+                        "/test — проверить все пары"
                     )
 
-                # ==================================================
-                # TEST
-                # ==================================================
+                # ------------------------------------------------
+                # /test
+                # ------------------------------------------------
 
                 elif text in [
                     "/test",
@@ -976,7 +836,6 @@ def telegram_listener():
                             "❌ Ошибка теста:\n"
                             f"{e}"
                         )
-
 
         except Exception as e:
 
@@ -1005,13 +864,9 @@ def run_health_server():
         BaseHTTPRequestHandler
     ):
 
-        def do_GET(
-            self
-        ):
+        def do_GET(self):
 
-            self.send_response(
-                200
-            )
+            self.send_response(200)
 
             self.send_header(
                 "Content-Type",
@@ -1056,43 +911,69 @@ def run_health_server():
 
 if __name__ == "__main__":
 
-    print(
-        "=" * 60
-    )
-
+    print("=" * 60)
     print(
         "BINANCE ↔ BINGX "
         "ARBITRAGE BOT"
     )
+    print("=" * 60)
 
     print(
-        "=" * 60
+        "Monitoring:",
+        ", ".join(SYMBOLS)
     )
 
     print(
-        f"Monitoring "
-        f"{len(SYMBOLS)} pairs"
+        f"Binance fee: "
+        f"{BINANCE_FEE}%"
     )
 
-    # Health server
-    health_thread = (
-        threading.Thread(
-            target=run_health_server,
-            daemon=True
-        )
+    print(
+        f"BingX fee: "
+        f"{BINGX_FEE}%"
+    )
+
+    print(
+        f"Safety margin: "
+        f"{SAFETY_MARGIN}%"
+    )
+
+    print(
+        f"Minimum NET spread: "
+        f"{MIN_NET_SPREAD}%"
+    )
+
+    print(
+        f"Check interval: "
+        f"{CHECK_INTERVAL} sec"
+    )
+
+    print("=" * 60)
+
+    # --------------------------------------------------------
+    # Render Health Server
+    # --------------------------------------------------------
+
+    health_thread = threading.Thread(
+        target=run_health_server,
+        daemon=True
     )
 
     health_thread.start()
 
-    # Telegram listener
-    telegram_thread = (
-        threading.Thread(
-            target=telegram_listener,
-            daemon=True
-        )
+    # --------------------------------------------------------
+    # Telegram
+    # --------------------------------------------------------
+
+    telegram_thread = threading.Thread(
+        target=telegram_listener,
+        daemon=True
     )
 
     telegram_thread.start()
 
+    # --------------------------------------------------------
     # Основной мониторинг
+    # --------------------------------------------------------
+
     arbitrage_monitor()
